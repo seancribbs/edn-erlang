@@ -1,0 +1,121 @@
+edn <- whitespace? (term:term whitespace?)* `
+case Node of
+  %% Nothing but whitespace
+  [ _, []] ->
+        throw({edn,empty});
+  %% Just one datum
+  [ _, [[{term,Term}, _]]] ->
+       Term;
+  %% Lots of terms
+  [ _, Terms ] ->
+        [ T || [{term, T}, _WS] <- Terms ]
+end
+`;
+
+term <- string / boolean / nil ~;
+
+string <- '"' str:(!'"' ("\\\\" / '\\"' / .))*  '"' `unescape(?to_utf8(proplists:get_value(str, Node)))`;
+
+nil <- "nil" `'nil'`;
+
+boolean <- "true" / "false" `binary_to_existing_atom(Node, utf8)`;
+
+whitespace <- [,\s\v\f\r\n\t]+ `'$space'`;
+
+`
+%% -----------------------
+%% Macros
+%% -----------------------
+-define(to_utf8(X), unicode:characters_to_binary(lists:flatten(X), utf8, utf8)).
+
+%% -------------------------------------
+%% QuickCheck properties and generators
+%% -------------------------------------
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-include_lib("eunit/include/eunit.hrl").
+-compile(export_all).
+
+gen_string() ->
+    ?LET(Str, list(gen_string_char()),
+         ?to_utf8([$", Str, $"])).
+
+gen_string_char() ->
+    oneof([?SUCHTHAT(C, utf8_char(), C =/= $" andalso C =/= $\\), gen_escape_char()]).
+
+gen_escape_char() ->
+    oneof([<<"\\t">>, <<"\\r">>, <<"\\n">>, <<"\\\"">>]).    
+
+%% Borrowed from erlang_protobuffs, generates a valid UTF8 char
+utf8_char() ->
+    elements([choose(0, 36095), 
+              choose(57344, 65533),
+              choose(65536, 1114111)]).
+
+%% Generates 'nil'.
+gen_nil() ->
+    <<"nil">>.
+
+%% Generates a boolean value, optionally surrounded by whitespace.
+gen_bool() ->
+    oneof([<<"true">>, <<"false">>]).
+
+%% Generates whitespace.
+gen_ws() ->
+    ?LET(X, 
+         list(oneof([9, 10, 11, 12, 13, 32, $,])),
+         ?to_utf8(X)).
+
+%% Generates random whitespace around another generator
+ws_wrap(Gen) ->
+    ?LET({LWS, V, TWS}, 
+         {gen_ws(), Gen, gen_ws()},
+         ?to_utf8([LWS, V, TWS])).
+
+%% Elements are generally separated by whitespace. Whitespace is not
+%% otherwise significant, nor need redundant whitespace be preserved
+%% during transmissions. Commas "," are also considered whitespace,
+%% other than within strings.
+prop_whitespace() ->
+    ?FORALL(Spaces, gen_ws(),
+                    ok == ?assertThrow({edn,empty}, parse(Spaces))).
+
+%% true and false should be mapped to booleans.
+prop_bool() ->
+    ?FORALL(Boolean, ws_wrap(gen_bool()),
+            lists:member(parse(Boolean), [true, false])).
+
+%% nil represents nil, null or nothing. It should be read as an object
+%% with similar meaning on the target platform.
+prop_nil() ->
+    ?FORALL(Nil, ws_wrap(gen_nil()),
+            nil == parse(Nil)).
+
+prop_unescape() ->
+    ?FORALL(Char, gen_escape_char(),
+            lists:member(unescape(Char), [<<"\t">>, <<"\r">>, <<"\n">>, <<"\"">>])).
+
+%% Strings are enclosed in "double quotes". May span multiple lines.
+%% Standard C/Java escape characters \t \r \n are supported.
+prop_string() ->
+    ?FORALL(String, ws_wrap(gen_string()),
+            is_binary(parse(String))).
+-endif.
+
+%% -----------------------
+%% Utility functions
+%% -----------------------
+unescape(<<$\\,$", Rest/binary>>) ->
+    <<$",(unescape(Rest))/binary>>;
+unescape(<<$\\,C, Rest/binary>>) when C == $t ->
+    <<9,(unescape(Rest))/binary>>;
+unescape(<<$\\,C, Rest/binary>>) when C == $r ->
+    <<13,(unescape(Rest))/binary>>;
+unescape(<<$\\,C, Rest/binary>>) when C == $n ->
+    <<10,(unescape(Rest))/binary>>;
+unescape(<<C, Rest/binary>>) ->
+    <<C, (unescape(Rest))/binary>>;
+unescape(<<>>) ->
+    <<>>.
+
+`

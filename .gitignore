@@ -1,0 +1,7 @@
+ebin
+src/edn.erl
+deps
+.eunit
+.qc
+.eqc-info
+current_counterexample.eqc

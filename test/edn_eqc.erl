@@ -16,6 +16,12 @@
 %% Generators
 %% -------------------------------------
 
+%% Generates a floating point number
+gen_float() ->
+    ?LET({Float, Mark},
+         {real(), elements([[], [$M]])},
+         list_to_binary(float_to_list(Float) ++ Mark)).
+
 %% Generates an integer
 gen_integer() ->
     elements([gen_int(), gen_arb_int()]).
@@ -197,4 +203,9 @@ prop_character() ->
 prop_integer() ->
     ?FORALL(Int, ws_wrap(gen_int()),
             is_integer(parse(Int))).
+
+%% floating point numbers: 64-bit (double) precision is expected.
+prop_float() ->
+    ?FORALL(Float, ws_wrap(gen_float()),
+            is_float(parse(Float))).
 -endif.

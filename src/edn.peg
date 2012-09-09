@@ -20,7 +20,18 @@ tagged_element <- tag whitespace? element
   {Sym, Elem}
 `;
 
-element <- integer / character / keyword / string / boolean / nil / symbol ~;
+element <- float / integer / character / keyword / string / boolean / nil / symbol ~;
+
+float <- '-'? [0-9]+ (frac exp / frac / exp) 'M'? `
+  case Node of
+    [Sign, Int, {f, Frac}, _] -> list_to_float(binary_to_list(list_to_binary([Sign, Int, Frac])));
+    [Sign, Int, {e, Exp}, _] -> list_to_float(binary_to_list(list_to_binary([Sign, Int, ".0", Exp])));
+    [Sign, Int, [{f, Frac}, {e, Exp}], _] -> list_to_float(binary_to_list(list_to_binary([Sign, Int, Frac, Exp])))
+  end
+`;
+
+frac <- '.' [0-9]+ `{f, Node}`;
+exp <- [eE] ('+' / '-')? [0-9]+ `{e, Node}`;
 
 integer <- '-'? [0-9]+ 'N'? `
   [Sign, Nums, _] = Node,

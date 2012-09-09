@@ -20,7 +20,12 @@ tagged_element <- tag whitespace? element
   {Sym, Elem}
 `;
 
-element <- character / keyword / string / boolean / nil / symbol ~;
+element <- integer / character / keyword / string / boolean / nil / symbol ~;
+
+integer <- '-'? [0-9]+ 'N'? `
+  [Sign, Nums, _] = Node,
+  list_to_integer(binary_to_list(list_to_binary([Sign, Nums])))
+`;
 
 character <- '\\' (special_char / !special_char .) `
 case Node of

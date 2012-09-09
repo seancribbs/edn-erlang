@@ -16,6 +16,18 @@
 %% Generators
 %% -------------------------------------
 
+%% Generates an integer
+gen_integer() ->
+    elements([gen_int(), gen_arb_int()]).
+
+%% Generates an integer with the arbitrary precision marker
+gen_arb_int() ->
+    ?LET(I, int(), list_to_binary(integer_to_list(I) ++ [$N])).
+
+%% Generates an integer without the arbitrary precision marker
+gen_int() ->
+    ?LET(I, int(), list_to_binary(integer_to_list(I))).
+
 %% Generates a character
 gen_char() ->
     frequency([{1, <<"\\newline">>},
@@ -62,8 +74,8 @@ gen_normal_symbol() ->
 gen_simple_symbol() ->
     ?LET({H,T},
          {oneof([
-                 [ oneof([$., $-]), list(gen_non_numeric_with_punct()) ],
-                 list(gen_non_numeric())
+                 [ oneof([$., $-]), non_empty(list(gen_non_numeric_with_punct())) ],
+                 non_empty(list(gen_non_numeric()))
                 ]),
           list(gen_symbol_char())},
          ?to_utf8([H,T])).
@@ -178,4 +190,11 @@ prop_character() ->
                 is_integer(Result) andalso
                     is_binary(catch ?to_utf8([Result]))
             end).
+
+%% Integers consist of the digits 0 - 9, optionally prefixed by - to
+%% indicate a negative number. An integer can have the suffix N to
+%% indicate that arbitrary precision is desired.
+prop_integer() ->
+    ?FORALL(Int, ws_wrap(gen_int()),
+            is_integer(parse(Int))).
 -endif.

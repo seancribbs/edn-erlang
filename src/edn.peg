@@ -14,23 +14,35 @@ edn <- whitespace? (term:term whitespace?)* `
 
 term <- tagged_element / element ~;
 
-tagged_element <- tag whitespace? element 
+tagged_element <- tag whitespace? element
 `
   [{tag, Sym}, _, Elem] = Node,
   {Sym, Elem}
 `;
 
-element <- keyword / string / boolean / nil / symbol ~;
+element <- character / keyword / string / boolean / nil / symbol ~;
+
+character <- '\\' (special_char / !special_char .) `
+case Node of
+    [<<"\\">>, [[], Char]] -> {char, decode_char(Char)};
+    [<<"\\">>, Special] -> {char, Special}
+end`;
+
+special_char <- "newline" / "space" / "tab" `
+case Node of
+    <<"newline">> -> $\n;
+    <<"space">> -> $\s;
+    <<"tab">> -> $\t
+end
+`;
 
 keyword <- ':' symbol `
-  %% This might break if there's a UTF-8 symbol.
-  [_, Sym] = Node, 
+  [_, Sym] = Node,
   list_to_atom([$:|atom_to_list(Sym)])
 `;
 
 tag <- '#' symbol `{tag, hd(tl(Node))}`;
 
-%% TODO
 symbol <- '/' symbol_char* / (symbol_start ('/' symbol_char*)?) `
   binary_to_atom(?to_utf8(Node), utf8)
 `;
@@ -63,6 +75,11 @@ whitespace <- [,\s\v\f\r\n\t]+ `
 %% -----------------------
 %% Utility functions
 %% -----------------------
+decode_char(<<C/utf8>>) ->
+    C;
+decode_char(I) when is_integer(I) ->
+    I.
+
 unescape(<<$\\,$", Rest/binary>>) ->
     <<$",(unescape(Rest))/binary>>;
 unescape(<<$\\,C, Rest/binary>>) when C == $t ->

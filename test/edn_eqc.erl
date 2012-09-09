@@ -12,13 +12,29 @@
 
 -compile(export_all).
 
+%% -------------------------------------
+%% Generators
+%% -------------------------------------
+
+%% Generates a character
+gen_char() ->
+    frequency([{1, <<"\\newline">>},
+               {1, <<"\\space">>},
+               {1, <<"\\tab">>},
+               {10, ?LET(Char,
+                         choose(33,126), %% TODO: Use characters other than US-ASCII printable
+                         ?to_utf8([$\\, Char]))}]).
+
+%% Generates a double-quoted string
 gen_string() ->
     ?LET(Str, list(gen_string_char()),
          ?to_utf8([$", Str, $"])).
 
+%% Generates a character that is valid within a string
 gen_string_char() ->
     oneof([?SUCHTHAT(C, utf8_char(), C =/= $" andalso C =/= $\\), gen_escape_char()]).
 
+%% Generates a valid escape character within a string
 gen_escape_char() ->
     oneof([<<"\\t">>, <<"\\r">>, <<"\\n">>, <<"\\\"">>]).
 
@@ -28,17 +44,21 @@ utf8_char() ->
               choose(57344, 65533),
               choose(65536, 1114111)]).
 
+%% Generates a symbol
 gen_symbol() ->
     frequency([ {1, gen_leading_slash_symbol()}, {5, gen_normal_symbol()} ]).
 
+%% Generates a symbol with a leading slash
 gen_leading_slash_symbol() ->
     ?LET(Chars, list(gen_symbol_char()), ?to_utf8([<<"/">>, Chars])).
 
+%% Generates a normal symbol, i.e. one without a leading slash
 gen_normal_symbol() ->
     frequency([{2, gen_simple_symbol()},
            {1, gen_trailing_slash_symbol()},
            {2, gen_embedded_slash_symbol()}]).
 
+%% Generates a symbol that doesn't contain a slash
 gen_simple_symbol() ->
     ?LET({H,T},
          {oneof([
@@ -48,24 +68,32 @@ gen_simple_symbol() ->
           list(gen_symbol_char())},
          ?to_utf8([H,T])).
 
+%% Generates a symbol with a trailing slash
 gen_trailing_slash_symbol() ->
     ?LET(Sym, gen_simple_symbol(), ?to_utf8([Sym, $/])).
 
+%% Generates a symbol with a slash in the middle
 gen_embedded_slash_symbol() ->
     ?LET({H,T},
          {gen_simple_symbol(), list(gen_symbol_char())},
          ?to_utf8([H, $/, T])).
 
+%% Generates a non-numeric character that is valid within a symbol
 gen_non_numeric() ->
     oneof([$., $$, $+, $!, $-, $_, $?] ++
           lists:seq($A, $Z) ++
           lists:seq($a, $z)).
 
+%% Generates a non-numeric character that is valid within a symbol,
+%% but with the addition of # and : which are valid when not in first
+%% position.
 gen_non_numeric_with_punct() ->
     oneof([$., $$, $+, $!, $-, $_, $?, $#, $:] ++
           lists:seq($A, $Z) ++
           lists:seq($a, $z)).
 
+%% Generates a character that is valid within a symbol after the first
+%% and second positions.
 gen_symbol_char() ->
     oneof([$., $$, $+, $!, $-, $_, $?, $#, $:] ++
           lists:seq($A, $Z) ++
@@ -76,7 +104,7 @@ gen_symbol_char() ->
 gen_nil() ->
     <<"nil">>.
 
-%% Generates a boolean value, optionally surrounded by whitespace.
+%% Generates a boolean value
 gen_bool() ->
     oneof([<<"true">>, <<"false">>]).
 
@@ -91,6 +119,10 @@ ws_wrap(Gen) ->
     ?LET({LWS, V, TWS},
          {gen_ws(), Gen, gen_ws()},
          ?to_utf8([LWS, V, TWS])).
+
+%% ---------------------------------------------------
+%% Parser properties (edn docs copy-pasted above each)
+%% ---------------------------------------------------
 
 %% Elements are generally separated by whitespace. Whitespace is not
 %% otherwise significant, nor need redundant whitespace be preserved
@@ -136,4 +168,14 @@ prop_string() ->
 prop_symbol() ->
     ?FORALL(Symbol, ws_wrap(non_empty(gen_symbol())),
             is_atom(parse(Symbol))).
+
+%% Characters are preceded by a backslash: \c. \newline, \space and
+%% \tab yield the corresponding characters.
+prop_character() ->
+    ?FORALL(Char, ws_wrap(gen_char()),
+            begin
+                {char, Result} = parse(Char),
+                is_integer(Result) andalso
+                    is_binary(catch ?to_utf8([Result]))
+            end).
 -endif.

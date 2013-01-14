@@ -5,3 +5,4 @@ deps
 .qc
 .eqc-info
 current_counterexample.eqc
+*.beam

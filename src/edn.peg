@@ -1,14 +1,14 @@
-edn <- whitespace? (term:term whitespace?)* `
+edn <- whitespace? (head:term tail:(whitespace term:term)*)? whitespace?`
   case Node of
     %% Nothing but whitespace
-    [ _, []] ->
+    [ _, [], _] ->
           throw({edn,empty});
     %% Just one datum
-    [ _, [[{term,Term}, _]]] ->
+    [ _, [{head,Term}, {tail, []}], _ ] ->
          Term;
     %% Lots of terms
-    [ _, Terms ] ->
-          [ T || [{term, T}, _WS] <- Terms ]
+    [ _, [{head, H}, {tail, Terms}], _ ] ->
+         [ H |  [ T || [_, {term, T}] <- Terms ]]
   end
 `;
 

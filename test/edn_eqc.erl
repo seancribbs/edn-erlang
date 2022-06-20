@@ -104,7 +104,7 @@ gen_simple_symbol() ->
     ?LET({H,T},
          {oneof([
                  [ oneof([$., $-]), non_empty(list(gen_non_numeric_with_punct())) ],
-                 non_empty(list(gen_non_numeric()))
+                 [ gen_non_numeric_non_minus_plus(), non_empty(list(gen_non_numeric())) ]
                 ]),
           list(gen_symbol_char())},
          ?to_utf8([H,T])).
@@ -118,6 +118,12 @@ gen_embedded_slash_symbol() ->
     ?LET({H,T},
          {gen_simple_symbol(), list(gen_symbol_char())},
          ?to_utf8([H, $/, T])).
+
+%% Generates a non-numeric character that is valid as the character of a symbol
+gen_non_numeric_non_minus_plus() ->
+    oneof([$., $$, $!, $_, $?] ++
+              lists:seq($A, $Z) ++
+              lists:seq($a, $z)).
 
 %% Generates a non-numeric character that is valid within a symbol
 gen_non_numeric() ->
